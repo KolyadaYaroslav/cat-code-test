@@ -78,7 +78,7 @@ export const initializeDatabase = () => {
       });
 
       // Seed initial products if table is empty
-      db.run(`SELECT COUNT(*) as count FROM products`, (err, row: any) => {
+      db.run(`SELECT COUNT(*) as count FROM products`, (err: Error | null, row: any) => {
         if (err) {
           reject(err);
           return;
