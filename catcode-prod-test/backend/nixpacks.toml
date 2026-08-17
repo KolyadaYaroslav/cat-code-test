@@ -1,0 +1,26 @@
+# Nixpacks configuration for Railway
+# This tells Nixpacks how to build and run the app
+
+[build]
+# Don't need Python, only Node.js
+excludeFiles = ["node_modules", "dist", "*.db"]
+
+[variables]
+# Node version
+NODE_ENV = "production"
+
+[phases.setup]
+# Install Node.js
+nixPkgs = ["nodejs_18"]
+
+[phases.install]
+# Install dependencies
+cmds = ["npm ci"]
+
+[phases.build]
+# Build TypeScript
+cmds = ["npm run build"]
+
+[start]
+# Start the application
+cmd = "npm start"

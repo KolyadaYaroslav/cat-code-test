@@ -1,0 +1,13 @@
+# Railway configuration
+# This tells Railway to build and deploy only the backend service
+
+services:
+  backend:
+    root: ./backend
+    builder: nixpacks
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    port: 3000
+    healthCheck:
+      path: /api/health
+      interval: 30
