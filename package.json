@@ -2,10 +2,10 @@
   "name": "vetgenetika",
   "version": "1.0.0",
   "description": "ВетГенетика - online store for cattle insemination products",
-  "main": "index.js",
+  "main": "backend/dist/index.js",
   "scripts": {
     "build": "cd backend && npm install && npm run build",
-    "start": "node index.js",
+    "start": "node backend/dist/index.js",
     "dev": "cd backend && npm run dev"
   },
   "keywords": [],

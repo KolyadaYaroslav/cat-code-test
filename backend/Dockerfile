@@ -4,14 +4,14 @@ FROM node:18-alpine AS builder
 WORKDIR /app
 
 # Копируем зависимости
-COPY package*.json ./
+COPY backend/package*.json ./
 
 # Устанавливаем зависимости (включая dev)
 RUN npm ci
 
 # Копируем исходный код
-COPY tsconfig.json ./
-COPY src ./src
+COPY backend/tsconfig.json ./
+COPY backend/src ./src
 
 # Собираем TypeScript
 RUN npm run build
@@ -22,7 +22,7 @@ FROM node:18-alpine
 WORKDIR /app
 
 # Копируем только необходимые файлы из builder
-COPY package*.json ./
+COPY backend/package*.json ./
 
 # Устанавливаем только production зависимости
 RUN npm ci --production
