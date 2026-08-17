@@ -1,0 +1,103 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+    
+    # Запустить тесты перед деплоем
+    - name: Run CI checks
+      run: |
+        cd backend
+        npm ci
+        npx tsc --noEmit
+        npm run build
+    
+    # Опция 1: Деплой на Railway
+    - name: Deploy to Railway
+      if: ${{ secrets.RAILWAY_TOKEN != '' }}
+      env:
+        RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      run: |
+        npm install -g @railway/cli
+        railway link --projectId ${{ secrets.RAILWAY_PROJECT_ID }}
+        railway up --service backend --detach
+    
+    # Опция 2: Деплой на Heroku
+    - name: Deploy to Heroku
+      if: ${{ secrets.HEROKU_API_KEY != '' && secrets.RAILWAY_TOKEN == '' }}
+      uses: akhileshns/heroku-deploy@v3.12.13
+      with:
+        heroku_api_key: ${{ secrets.HEROKU_API_KEY }}
+        heroku_app_name: ${{ secrets.HEROKU_APP_NAME }}
+        heroku_email: ${{ secrets.HEROKU_EMAIL }}
+        dir: "backend"
+        procfile: "Procfile"
+    
+    # Опция 3: Деплой на AWS
+    - name: Configure AWS credentials
+      if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.RAILWAY_TOKEN == '' && secrets.HEROKU_API_KEY == '' }}
+      uses: aws-actions/configure-aws-credentials@v2
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+    
+    - name: Deploy to AWS (if configured)
+      if: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.RAILWAY_TOKEN == '' && secrets.HEROKU_API_KEY == '' }}
+      run: |
+        echo "AWS deployment configured - implement your AWS deployment script"
+        # Пример для Elastic Beanstalk
+        # eb deploy
+    
+    # Отправить уведомление в Slack при успешном деплое
+    - name: Notify Slack on success
+      if: success() && secrets.SLACK_WEBHOOK_URL
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        payload: |
+          {
+            "text": "✅ Production deployment successful!",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "✅ *Production deployment successful!*\n\nBranch: `main`\nCommit: `${{ github.sha }}`\nAuthor: ${{ github.actor }}"
+                }
+              }
+            ]
+          }
+    
+    - name: Notify Slack on failure
+      if: failure() && secrets.SLACK_WEBHOOK_URL
+      uses: slackapi/slack-github-action@v1.24.0
+      with:
+        webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+        payload: |
+          {
+            "text": "❌ Production deployment failed!",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "❌ *Production deployment failed!*\n\nBranch: `main`\nCommit: `${{ github.sha }}`\nAuthor: ${{ github.actor }}\n\nCheck logs: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                }
+              }
+            ]
+          }

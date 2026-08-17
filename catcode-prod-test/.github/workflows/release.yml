@@ -1,0 +1,86 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Extract version
+      id: version
+      run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+    
+    - name: Validate version format
+      run: |
+        if [[ ! "${{ steps.version.outputs.VERSION }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "Invalid version format. Use v1.0.0"
+          exit 1
+        fi
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+    
+    - name: Build backend
+      run: |
+        cd backend
+        npm ci
+        npm run build
+    
+    - name: Generate changelog
+      id: changelog
+      run: |
+        echo "CHANGES<<EOF" >> $GITHUB_OUTPUT
+        git log $(git describe --tags --abbrev=0)..HEAD --pretty=format:"- %h %s (%an)" >> $GITHUB_OUTPUT || echo "Initial release" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Create GitHub Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION }}
+        release_name: Release ${{ steps.version.outputs.VERSION }}
+        body: |
+          ## What's Changed
+          ${{ steps.changelog.outputs.CHANGES }}
+          
+          ## Installation
+          
+          ### Backend
+          ```bash
+          npm install
+          npm run build
+          npm start
+          ```
+          
+          ### Frontend
+          ```bash
+          cd catcode-prod-test
+          python3 -m http.server 8000
+          ```
+          
+          ## Commits in this Release
+          https://github.com/${{ github.repository }}/compare/$(git describe --tags --abbrev=0)...${{ steps.version.outputs.VERSION }}
+        draft: false
+        prerelease: false
+    
+    - name: Upload release assets
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./backend/dist
+        asset_name: backend-${{ steps.version.outputs.VERSION }}.zip
+        asset_content_type: application/zip

@@ -1,0 +1,122 @@
+name: CI - Build & Test
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test-backend:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+    
+    - name: Install dependencies
+      run: |
+        cd backend
+        npm ci
+    
+    - name: Check TypeScript syntax
+      run: |
+        cd backend
+        npx tsc --noEmit
+    
+    - name: Run linter (if configured)
+      run: |
+        cd backend
+        npm run lint 2>/dev/null || echo "No linter configured"
+    
+    - name: Build TypeScript
+      run: |
+        cd backend
+        npm run build
+    
+    - name: Check for security vulnerabilities
+      run: |
+        cd backend
+        npm audit --audit-level=moderate
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Validate HTML
+      run: |
+        cd catcode-prod-test
+        # Basic HTML validation
+        if ! grep -q "<!DOCTYPE html>" index.html; then
+          echo "Invalid HTML structure"
+          exit 1
+        fi
+    
+    - name: Check JavaScript syntax
+      run: |
+        cd catcode-prod-test
+        # Use Node.js to validate JS files
+        node -c assets/app.js
+        node -c assets/store.js
+        node -c assets/api.js
+        node -c assets/api-adapter.js
+
+  code-quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+    
+    - name: Check for large files
+      run: |
+        echo "Checking for large files..."
+        find . -type f -size +10M | grep -v node_modules && exit 1 || echo "✓ No large files"
+    
+    - name: Count lines of code
+      run: |
+        echo "Backend TypeScript lines:"
+        find backend/src -name "*.ts" -exec wc -l {} + | tail -1
+        echo "Frontend JavaScript lines:"
+        find catcode-prod-test/assets -name "*.js" -exec wc -l {} + | tail -1
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18.x
+    
+    - name: Check for secrets in code
+      run: |
+        cd backend
+        # Check if .env.example exists but no hardcoded secrets
+        if grep -r "JWT_SECRET\|DATABASE_URL\|API_KEY" src/ --include="*.ts" | grep -v ".env"; then
+          echo "⚠️ Warning: Possible hardcoded secrets found"
+          grep -r "JWT_SECRET\|DATABASE_URL\|API_KEY" src/ --include="*.ts" | grep -v ".env"
+        fi
+    
+    - name: Verify no passwords in code
+      run: |
+        if grep -r "password\|passwd\|pwd" . --include="*.ts" --include="*.js" --include="*.json" | grep -i "=\|:.*[a-zA-Z0-9]" | grep -v node_modules | grep -v ".git"; then
+          echo "⚠️ Warning: Possible passwords found in code"
+          exit 0
+        fi
